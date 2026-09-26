@@ -1,0 +1,16 @@
+Pages: 12000   Edges: 1929566
+Outgoing links: avg=160.80 median=161.0 max=322 min=0 quintiles(20/40/60/80%)=[65.00, 129.00, 193.00, 257.00]
+Incoming links: avg=160.80 median=161.0 max=231 min=115 quintiles(20/40/60/80%)=[150.00, 158.00, 164.00, 171.00]
+
+PageRank converged in 3 iterations (sum of PR = 0.994805)
+Top 5 pages by PageRank:
+  1. 5207.html       PR=0.00019577
+  2. 7443.html       PR=0.00018132
+  3. 7400.html       PR=0.00017925
+  4. 950.html        PR=0.00017317
+  5. 369.html        PR=0.00017302
+
+Best closeness centrality: 10376.html  closeness=0.504647
+
+Timing (s): read=2.68 build+stats=0.31 pagerank=0.16 closeness=441.66 total=444.81
+EOF
