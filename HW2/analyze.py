@@ -18,17 +18,37 @@ def load_from_dir(path):
 
 
 def load_from_gcs(bucket_name, prefix):
-    from google.cloud import storage
-    from google.cloud.storage import transfer_manager
-    client = storage.Client.create_anonymous_client()
-    bucket = client.bucket(bucket_name)
-    blob_names = [b.name for b in client.list_blobs(bucket, prefix=prefix) if not b.name.endswith("/")]
-    results = transfer_manager.download_many_to_memory(bucket, blob_names, max_workers=16)
+    import requests
+    from concurrent.futures import ThreadPoolExecutor
+
+    session = requests.Session()
+
+    names = []
+    page_token = None
+    while True:
+        params = {"prefix": prefix, "maxResults": 1000}
+        if page_token:
+            params["pageToken"] = page_token
+        r = session.get(f"https://storage.googleapis.com/storage/v1/b/{bucket_name}/o",
+                         params=params, timeout=30)
+        r.raise_for_status()
+        data = r.json()
+        for item in data.get("items", []):
+            if not item["name"].endswith("/"):
+                names.append(item["name"])
+        page_token = data.get("nextPageToken")
+        if not page_token:
+            break
+
+    def fetch(name):
+        r = session.get(f"https://storage.googleapis.com/{bucket_name}/{name}", timeout=30)
+        r.raise_for_status()
+        return name, r.text
+
     pages = {}
-    for name, result in zip(blob_names, results):
-        if isinstance(result, Exception):
-            raise result
-        pages[name.split("/")[-1]] = parse_links(result.decode("utf-8", "replace"))
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        for name, text in ex.map(fetch, names):
+            pages[name.split("/")[-1]] = parse_links(text)
     return pages
 
 
