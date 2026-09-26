@@ -6,6 +6,7 @@ import time
 from graph import Graph, parse_links, summarize, pagerank, top_k, best_closeness
 
 
+
 def load_from_dir(path):
     pages = {}
     for name in os.listdir(path):
@@ -18,14 +19,16 @@ def load_from_dir(path):
 
 def load_from_gcs(bucket_name, prefix):
     from google.cloud import storage
+    from google.cloud.storage import transfer_manager
     client = storage.Client.create_anonymous_client()
     bucket = client.bucket(bucket_name)
+    blob_names = [b.name for b in client.list_blobs(bucket, prefix=prefix) if not b.name.endswith("/")]
+    results = transfer_manager.download_many_to_memory(bucket, blob_names, max_workers=16)
     pages = {}
-    for blob in client.list_blobs(bucket, prefix=prefix):
-        if blob.name.endswith("/"):
-            continue
-        name = blob.name.split("/")[-1]
-        pages[name] = parse_links(blob.download_as_bytes().decode("utf-8", "replace"))
+    for name, result in zip(blob_names, results):
+        if isinstance(result, Exception):
+            raise result
+        pages[name.split("/")[-1]] = parse_links(result.decode("utf-8", "replace"))
     return pages
 
 
