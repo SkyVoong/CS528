@@ -18,27 +18,28 @@ def load_from_dir(path):
 
 
 def load_from_gcs(bucket_name, prefix):
-    import requests
+    import subprocess, requests
     from concurrent.futures import ThreadPoolExecutor
+
+    result = subprocess.run(
+        ["gcloud", "storage", "ls", f"gs://{bucket_name}/{prefix}"],
+        capture_output=True, text=True, check=True
+    )
+    names = [line.strip()[len(f"gs://{bucket_name}/"):] for line in result.stdout.splitlines()
+             if line.strip() and not line.strip().endswith("/")]
 
     session = requests.Session()
 
-    names = []
-    page_token = None
-    while True:
-        params = {"prefix": prefix, "maxResults": 1000}
-        if page_token:
-            params["pageToken"] = page_token
-        r = session.get(f"https://storage.googleapis.com/storage/v1/b/{bucket_name}/o",
-                         params=params, timeout=30)
+    def fetch(name):
+        r = session.get(f"https://storage.googleapis.com/{bucket_name}/{name}", timeout=30)
         r.raise_for_status()
-        data = r.json()
-        for item in data.get("items", []):
-            if not item["name"].endswith("/"):
-                names.append(item["name"])
-        page_token = data.get("nextPageToken")
-        if not page_token:
-            break
+        return name, r.text
+
+    pages = {}
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        for name, text in ex.map(fetch, names):
+            pages[name.split("/")[-1]] = parse_links(text)
+    return pages
 
     def fetch(name):
         r = session.get(f"https://storage.googleapis.com/{bucket_name}/{name}", timeout=30)
