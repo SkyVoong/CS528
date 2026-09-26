@@ -17,39 +17,32 @@ def load_from_dir(path):
     return pages
 
 
-def load_from_gcs(bucket_name, prefix):
-    import subprocess, requests
-    from concurrent.futures import ThreadPoolExecutor
+def load_from_gcs(bucket_name, prefix, workers=16):
+    import io
+    from google.cloud import storage
+    from google.cloud.storage import transfer_manager
+    from google.cloud.storage.retry import DEFAULT_RETRY
 
-    result = subprocess.run(
-        ["gcloud", "storage", "ls", f"gs://{bucket_name}/{prefix}"],
-        capture_output=True, text=True, check=True
+    timeout = (5, 15)                        # drop a request after 15s with no data
+    retry = DEFAULT_RETRY.with_timeout(600)  # keep retrying a stalled request for up to 10 min
+
+    client = storage.Client.create_anonymous_client()
+    bucket = client.bucket(bucket_name)
+    blobs = [b for b in client.list_blobs(bucket, prefix=prefix, page_size=1000,
+                                          timeout=timeout, retry=retry)
+             if not b.name.endswith("/")]
+    buffers = [io.BytesIO() for _ in blobs]
+    results = transfer_manager.download_many(
+        list(zip(blobs, buffers)),
+        download_kwargs={"timeout": timeout, "retry": retry},
+        worker_type=transfer_manager.THREAD,
+        max_workers=workers,
     )
-    names = [line.strip()[len(f"gs://{bucket_name}/"):] for line in result.stdout.splitlines()
-             if line.strip() and not line.strip().endswith("/")]
-
-    session = requests.Session()
-
-    def fetch(name):
-        r = session.get(f"https://storage.googleapis.com/{bucket_name}/{name}", timeout=30)
-        r.raise_for_status()
-        return name, r.text
-
     pages = {}
-    with ThreadPoolExecutor(max_workers=16) as ex:
-        for name, text in ex.map(fetch, names):
-            pages[name.split("/")[-1]] = parse_links(text)
-    return pages
-
-    def fetch(name):
-        r = session.get(f"https://storage.googleapis.com/{bucket_name}/{name}", timeout=30)
-        r.raise_for_status()
-        return name, r.text
-
-    pages = {}
-    with ThreadPoolExecutor(max_workers=16) as ex:
-        for name, text in ex.map(fetch, names):
-            pages[name.split("/")[-1]] = parse_links(text)
+    for blob, buf, result in zip(blobs, buffers, results):
+        if isinstance(result, Exception):
+            raise result
+        pages[blob.name.split("/")[-1]] = parse_links(buf.getvalue().decode("utf-8", "replace"))
     return pages
 
 
