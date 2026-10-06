@@ -2,6 +2,7 @@ import json
 import os
 from datetime import datetime, timezone
 
+import functions_framework 
 from google.api_core.exceptions import NotFound
 from google.cloud import pubxub_v1, storage
 
