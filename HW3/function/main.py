@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 import functions_framework 
 from google.api_core.exceptions import NotFound
-from google.cloud import pubxub_v1, storage
+from google.cloud import pubsub_v1, storage
 
 BUCKET = os.environ.get("BUCKET", "skyvoong-cs528-hw2")
 PREFIX = os.environ.get("PREFIX", "files/")
