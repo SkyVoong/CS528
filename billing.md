@@ -1,0 +1,1 @@
+Total spend for HW5 (Oct 25–28, 2026): $0.42 in usage (Compute Engine $0.18, Cloud SQL $0.16, Networking $0.04, Cloud Storage $0.02, Cloud Run Functions $0.02), fully covered by credits, so $0.00 charged. See billing_report.pdf in the hw5 folder.
