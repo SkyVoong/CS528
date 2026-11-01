@@ -18,10 +18,25 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 G="gcloud --project=$PROJECT_ID --quiet"
 exists() { "$@" >/dev/null 2>&1; }
 
+wait_sql_ops() {
+    for _ in $(seq 1 120); do
+        [ -z "$($G sql operations list --instance="$SQL_INSTANCE" --filter='status!=DONE' --format='value(name)' 2>/dev/null)" ] && return 0
+        sleep 20
+    done
+    return 1
+}
+
+set_db() {
+    wait_sql_ops || return 1
+    $G sql instances patch "$SQL_INSTANCE" --activation-policy="$1" --async >/dev/null || return 1
+    wait_sql_ops
+}
+
 cleanup() {
+    set +e
     echo "== cleanup: deleting the VM and stopping the database"
     exists $G compute instances describe "$VM" --zone="$ZONE" && $G compute instances delete "$VM" --zone="$ZONE"
-    $G sql instances patch "$SQL_INSTANCE" --activation-policy=NEVER >/dev/null
+    for _ in 1 2 3; do set_db NEVER && break; sleep 30; done
     exists $G scheduler jobs describe "$JOB" --location="$REGION" && $G scheduler jobs resume "$JOB" --location="$REGION" >/dev/null
     echo "database: $($G sql instances describe "$SQL_INSTANCE" --format='value(settings.activationPolicy)')"
 }
@@ -29,8 +44,9 @@ trap cleanup EXIT
 
 echo "== starting the database"
 exists $G scheduler jobs describe "$JOB" --location="$REGION" && $G scheduler jobs pause "$JOB" --location="$REGION" >/dev/null
-$G sql instances patch "$SQL_INSTANCE" --activation-policy=ALWAYS >/dev/null
+set_db ALWAYS || { echo "The database did not start."; exit 1; }
 until [ "$($G sql instances describe "$SQL_INSTANCE" --format='value(state)')" = "RUNNABLE" ]; do sleep 10; done
+echo "database is running"
 
 echo "== service account $SA_NAME (Cloud SQL client, the DB password secret, the bucket)"
 exists $G iam service-accounts describe "$SA" || $G iam service-accounts create "$SA_NAME" --display-name="hw6 models"
