@@ -79,8 +79,11 @@ exists $G storage ls "gs://$BUCKET/$OUT_PREFIX/summary.txt" || { echo "Timed out
 
 echo; echo "===== gs://$BUCKET/$OUT_PREFIX/summary.txt ====="
 $G storage cat "gs://$BUCKET/$OUT_PREFIX/summary.txt"
+TMP="$(mktemp -d)"
 for f in ip_country_test_predictions.csv income_test_predictions.csv; do
-    echo; echo "===== gs://$BUCKET/$OUT_PREFIX/$f (first 15 lines of $($G storage cat "gs://$BUCKET/$OUT_PREFIX/$f" | wc -l)) ====="
-    $G storage cat "gs://$BUCKET/$OUT_PREFIX/$f" | head -15
+    $G storage cp "gs://$BUCKET/$OUT_PREFIX/$f" "$TMP/$f" >/dev/null 2>&1
+    echo; echo "===== gs://$BUCKET/$OUT_PREFIX/$f (first 15 of $(wc -l < "$TMP/$f") lines) ====="
+    head -15 "$TMP/$f"
 done
+rm -rf "$TMP"
 echo
